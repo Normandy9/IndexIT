@@ -1,109 +1,74 @@
-# IndexIT
+# IndexIt
 
-IndexIT is a Windows-focused local document search engine written in C/C++. The project is designed to index files on a machine, tokenize and rank their content, and support fast local queries without depending on cloud services or heavyweight indexing infrastructure.
+**IndexIt: Optimized Local Document Search Engine for Windows**
 
-This repository is intended to be a practical and efficient search solution for local document collections, with a focus on:
+This repository contains the initial project foundation for IndexIt.
 
-- native Windows file discovery and scanning
-- fast in-memory term lookup using trie and hash table structures
-- inverted index storage for document-term mapping
-- TF-IDF / BM25-style ranking for relevant results
-- cache-aware storage to avoid uncontrolled memory growth
-- a lightweight CLI interface for indexing and searching
+## Current scope
 
-Repository: https://github.com/Normandy9/IndexIT.git
+- Cache interface (`CacheEntry`, `cache_get()`, `cache_put()`)
+- Initial database schema plan for `documents` and `terms`
+- Lightweight C tests using the standard `assert()` library
+- CMake build configuration
+- Minimal `indexit.exe` executable
 
----
-
-## Features
-
-- Local document indexing for Windows directories
-- Fast search over indexed content
-- Efficient term lookup using trie and hash-based structures
-- Ranking of search results by relevance
-- Disk-aware cache management
-- Modular C project design for easy extension
-
----
+The cache and database are currently **interfaces/plans only**. Their full implementations will be added in later development stages.
 
 ## Project Structure
 
 ```text
-IndexIT/
-├── include/                 # Public headers and module contracts
-├── src/                     # Main source code
-│   ├── core/
-│   ├── index/
-│   ├── cache/
-│   ├── db/
-│   ├── query/
-│   ├── benchmark/
-│   └── main.c
-├── tests/                   # Test cases for core modules
-├── data/                    # Sample input datasets
-├── benchmarks/              # Benchmark outputs and logs
-├── docs/                    # Documentation and planning notes
-├── third_party/              # Vendored dependencies
-├── .gitignore
+IndexIt/
 ├── CMakeLists.txt
 ├── README.md
-└── LICENSE
+├── .gitignore
+├── src/
+│   ├── main.c
+│   ├── cache.h
+│   └── db.h
+└── tests/
+    └── test_runner.c
 ```
 
----
+## Requirements
 
-## Prerequisites
-
-- Windows 10 or Windows 11
-- CMake 3.20+
-- MSVC or MinGW-w64
-- Git
-- Optional: SQLite, miniz, or document parsing libraries as the project expands
-
----
+- C compiler such as GCC/MinGW or MSVC
+- CMake 3.15 or newer
 
 ## Build
 
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
-
----
-
-## Usage
+From the project root:
 
 ```bash
-indexit.exe index <folder_path>
-indexit.exe search "<query>"
-indexit.exe stats
-indexit.exe clean
+cmake -S . -B build
+cmake --build build
 ```
 
----
+On Windows with a Visual Studio/ multi-config generator, the executable is normally located under:
 
-## Development Notes
+```text
+build/Debug/indexit.exe
+```
 
-This project follows a modular architecture designed to separate concerns between:
+Run it with:
 
-- file discovery and extraction
-- tokenization and indexing
-- ranking and query execution
-- persistence and caching
-- benchmarking and testing
+```bash
+.\build\Debug\indexit.exe
+```
 
-The goal is to create a local search engine that is lightweight, fast, and transparent enough to understand and extend.
+With a single-config generator such as MinGW Makefiles, it may be:
 
----
+```text
+build/indexit.exe
+```
 
-## License
+## Run tests
 
-This project is open for learning and development use. Please review the repository license before production or commercial use.
+```bash
+ctest --test-dir build --output-on-failure
+```
 
----
+The initial test runner demonstrates the lightweight `assert()`-based approach.
 
-## Contributing
+## Development note
 
-Contributions, suggestions, and improvements are welcome. You can fork the repository and open a pull request with your changes.
+This is the foundation stage. No real cache storage, SQLite database, document indexing, or search functionality is implemented yet.
