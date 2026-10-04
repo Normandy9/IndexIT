@@ -1,0 +1,3 @@
+document indexing helps developers search large collections of files.
+machine learning and information retrieval are useful for modern search systems.
+IndexIT uses an inverted index for fast lookup.

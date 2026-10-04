@@ -2,73 +2,148 @@
 
 **IndexIt: Optimized Local Document Search Engine for Windows**
 
-This repository contains the initial project foundation for IndexIt.
+This repository contains the IndexIt project foundation plus the Phase 2 query/CLI/benchmark integration.
 
-## Current scope
+## Phase 2 contribution
 
-- Cache interface (`CacheEntry`, `cache_get()`, `cache_put()`)
-- Initial database schema plan for `documents` and `terms`
-- Lightweight C tests using the standard `assert()` library
-- CMake build configuration
-- Minimal `indexit.exe` executable
+The current Phase 2 work provides:
 
-The cache and database are currently **interfaces/plans only**. Their full implementations will be added in later development stages.
+- `query.c` with the `run_query()` search interface
+- Exact-term lookup through the project `InvertedIndex` API
+- `main.c` CLI handling for:
+  - `index`
+  - `search`
+  - `stats`
+  - `clean`
+- High-resolution benchmark timing through:
+  - `timer_start()`
+  - `timer_stop_ms()`
+- A small in-memory index implementation so the query layer can be compiled and tested while the full indexing pipeline is still under development
+- CMake integration and basic tests
 
-## Project Structure
+## Current query flow
 
 ```text
-IndexIt/
-├── CMakeLists.txt
-├── README.md
-├── .gitignore
-├── src/
-│   ├── main.c
-│   ├── cache.h
-│   └── db.h
-└── tests/
-    └── test_runner.c
+CLI
+ |
+ +-- search <query>
+       |
+       +-- timer_start()
+       |
+       +-- run_query(query)
+              |
+              +-- index_lookup()
+       |
+       +-- timer_stop_ms()
 ```
 
-## Requirements
+The final production flow is expected to replace the temporary integration index with the team's full:
 
-- C compiler such as GCC/MinGW or MSVC
-- CMake 3.15 or newer
+```text
+File Walker
+   -> Format Adapter / Text Extraction
+   -> Tokenization
+   -> Inverted Index
+   -> Query Engine
+   -> Ranking
+   -> Results
+```
+
+## CLI
+
+```text
+indexit index <folder>
+indexit search <query>
+indexit stats
+indexit clean
+```
+
+The `stats` and `clean` commands currently remain integration placeholders because their corresponding production modules are not present in this repository branch.
 
 ## Build
-
-From the project root:
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-On Windows with a Visual Studio/ multi-config generator, the executable is normally located under:
-
-```text
-build/Debug/indexit.exe
-```
-
-Run it with:
-
-```bash
-.\build\Debug\indexit.exe
-```
-
-With a single-config generator such as MinGW Makefiles, it may be:
-
-```text
-build/indexit.exe
-```
-
-## Run tests
+Run tests:
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
-The initial test runner demonstrates the lightweight `assert()`-based approach.
+On Windows with Visual Studio:
 
-## Development note
+```text
+build/Debug/indexit.exe
+```
 
-This is the foundation stage. No real cache storage, SQLite database, document indexing, or search functionality is implemented yet.
+Example:
+
+```bash
+.\build\Debug\indexit.exe search machine
+```
+
+## Benchmarking
+
+The timer measures elapsed search time in milliseconds:
+
+```c
+timer_start();
+run_query("machine");
+double elapsed_ms = timer_stop_ms();
+```
+
+For the actual project benchmark, use the same document dataset and query set for both:
+
+```text
+Sequential Search
+        vs
+Indexed Search (IndexIt)
+```
+
+Run repeated trials and report the measured values rather than hard-coded/example numbers.
+
+Recommended benchmark dimensions:
+
+- 1,000 documents
+- 5,000 documents
+- 10,000 documents
+- repeated queries
+- cold-cache and warm-cache measurements once the cache layer is integrated
+
+## Important implementation note
+
+The repository currently does not contain the full document walker, format extraction, persistent SQLite layer, ranking implementation, or production cache implementation. The small in-memory index in `src/index/index.c` exists only to make the Phase 2 query/CLI code testable now. It should be replaced/connected to the team's production indexing module when that module is merged.
+
+## Project structure
+
+```text
+IndexIT/
+├── CMakeLists.txt
+├── README.md
+├── include/
+│   ├── benchmark.h
+│   ├── document.h
+│   ├── hashtable.h
+│   ├── inverted_index.h
+│   ├── query.h
+│   ├── token.h
+│   └── trie.h
+├── src/
+│   ├── main.c
+│   ├── benchmark/
+│   │   ├── benchmark.c
+│   │   └── benchmark.h
+│   ├── index/
+│   │   ├── index.c
+│   │   └── index.h
+│   ├── query/
+│   │   ├── query.c
+│   │   └── query.h
+│   ├── cache.h
+│   └── db.h
+└── tests/
+    └── test_runner.c
+```
