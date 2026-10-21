@@ -10,61 +10,55 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Ensure unicode path handling for Windows APIs
 add_compile_definitions(UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -municode")
 
-set(COMMON_INCLUDES
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/src
-    ${PROJECT_SOURCE_DIR}/src/core
-    ${PROJECT_SOURCE_DIR}/src/index
-    ${PROJECT_SOURCE_DIR}/src/query
-    ${PROJECT_SOURCE_DIR}/src/benchmark
-    ${PROJECT_SOURCE_DIR}/src/dataset
-)
-
-# Core engine library (DJ_WORK ingestion + PR#5 indexing + C++ OOP layer + UI)
-add_library(indexit_core STATIC
+set(SOURCES
+    src/main.cpp
     src/core/winfs.c
     src/core/extractor.c
     src/core/tokenizer.c
-    src/IExtractor.cpp
-    src/index/hashtable.c
     src/index/trie.c
+    src/index/hashtable.c
     src/index/inverted_index.c
-    src/ITermIndex.cpp
+    src/IExtractor.cpp
     src/IRanker.cpp
+    src/ITermIndex.cpp
     src/CppInvertedIndex.cpp
+    src/db.cpp
     src/UI.cpp
 )
-target_include_directories(indexit_core PUBLIC ${COMMON_INCLUDES})
 
-# Main CLI executable (Teammates' CLI + dataset indexer + UI bridge)
-add_executable(indexit
-    src/main.c
-    src/dataset/dataset.c
-    src/query/query.c
-    src/benchmark/benchmark.c
-    src/index/index.c
+add_executable(indexit ${SOURCES})
+
+target_include_directories(indexit PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/src/core
+    ${PROJECT_SOURCE_DIR}/src/index
+    ${PROJECT_SOURCE_DIR}/include
 )
-target_include_directories(indexit PRIVATE ${COMMON_INCLUDES})
-target_link_libraries(indexit PRIVATE indexit_core)
 
 enable_testing()
 
-# Teammates' test runner
 add_executable(test_runner
-    tests/test_runner.c
-    src/query/query.c
-    src/benchmark/benchmark.c
-    src/index/index.c
+    tests/test_runner.cpp
+    src/core/winfs.c
+    src/core/extractor.c
+    src/core/tokenizer.c
+    src/index/trie.c
+    src/index/hashtable.c
+    src/index/inverted_index.c
+    src/IExtractor.cpp
+    src/IRanker.cpp
+    src/ITermIndex.cpp
+    src/CppInvertedIndex.cpp
+    src/db.cpp
 )
-target_include_directories(test_runner PRIVATE ${COMMON_INCLUDES})
-add_test(NAME IndexItTests COMMAND test_runner)
 
-# Reconciled full engine test runner
-add_executable(test_engine
-    tests/test_engine.cpp
+target_include_directories(test_runner PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/include
 )
-target_include_directories(test_engine PRIVATE ${COMMON_INCLUDES})
-target_link_libraries(test_engine PRIVATE indexit_core)
-add_test(NAME EngineTests COMMAND test_engine)
+
+add_test(NAME IndexItTests COMMAND test_runner)

@@ -1,7 +1,7 @@
 #ifndef EXTRACTOR_H
 #define EXTRACTOR_H
 
-#include "document_dj.h"
+#include "document.h"
 #include <stddef.h>
 
 #ifdef __cplusplus

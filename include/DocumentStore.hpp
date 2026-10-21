@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
-#include "document_dj.h"
+#include "document.h" // reuse C Document struct or redefine
 
 namespace indexit {
 

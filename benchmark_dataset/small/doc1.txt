@@ -1,3 +1,0 @@
-machine learning algorithms improve document search performance.
-IndexIT is a local document search engine.
-fast search reduces query execution time.

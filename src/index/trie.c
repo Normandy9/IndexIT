@@ -141,3 +141,71 @@ size_t trie_search_count(const Trie *trie, const char *term) {
     
     return current->postings_count;
 }
+
+// Prefix search support
+static void collect_postings(TrieNode *node, Posting **results, size_t *count, size_t *capacity) {
+    if (!node) return;
+    for (size_t i = 0; i < node->postings_count; i++) {
+        int found = 0;
+        for (size_t j = 0; j < *count; j++) {
+            if ((*results)[j].document_id == node->postings[i].document_id) {
+                (*results)[j].frequency += node->postings[i].frequency;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            if (*count >= *capacity) {
+                *capacity = (*capacity == 0) ? 16 : (*capacity * 2);
+                *results = (Posting*)realloc(*results, *capacity * sizeof(Posting));
+            }
+            (*results)[(*count)++] = node->postings[i];
+        }
+    }
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        if (node->children[i]) {
+            collect_postings(node->children[i], results, count, capacity);
+        }
+    }
+}
+
+Posting* trie_prefix_search(const Trie *trie, const char *prefix, size_t *out_count) {
+    if (!trie || !trie->root || !prefix || !out_count) return NULL;
+    *out_count = 0;
+    
+    TrieNode *current = trie->root;
+    while (*prefix) {
+        int index = char_to_index(*prefix);
+        if (index == -1) { prefix++; continue; }
+        if (!current->children[index]) return NULL;
+        current = current->children[index];
+        prefix++;
+    }
+    
+    Posting *results = NULL;
+    size_t count = 0, capacity = 0;
+    collect_postings(current, &results, &count, &capacity);
+    *out_count = count;
+    return results;
+}
+
+// Benchmarking wrappers
+#include <windows.h>
+double trie_insert_timed(Trie *trie, const char *term, Posting posting) {
+    LARGE_INTEGER start, end, freq;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    trie_insert(trie, term, posting);
+    QueryPerformanceCounter(&end);
+    return (double)(end.QuadPart - start.QuadPart) / freq.QuadPart;
+}
+
+double trie_search_timed(const Trie *trie, const char *term, Posting **out_postings, size_t *out_count) {
+    LARGE_INTEGER start, end, freq;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    *out_postings = trie_search(trie, term);
+    *out_count = trie_search_count(trie, term);
+    QueryPerformanceCounter(&end);
+    return (double)(end.QuadPart - start.QuadPart) / freq.QuadPart;
+}

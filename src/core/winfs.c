@@ -59,8 +59,8 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
             continue;
         }
         
-        // Skip hidden and system files
-        if (find_data.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) {
+        // Skip hidden, system files, and symlinks/junctions (to prevent loops)
+        if (find_data.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_REPARSE_POINT)) {
             continue;
         }
         
@@ -72,16 +72,24 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
             result = winfs_walk_directory(full_path, callback, user_data);
             if (result != 0) break;
         } else {
+            uint64_t file_size = ((uint64_t)find_data.nFileSizeHigh << 32) | find_data.nFileSizeLow;
+            
+            // Skip files over 50MB to prevent memory exhaustion
+            if (file_size > 50 * 1024 * 1024) {
+                wprintf(L"WARN: File too large (>50MB), skipping: %ls\n", full_path);
+                continue;
+            }
+
             // We found a file
             // Attempt to open it briefly to check for sharing violation
             HANDLE hFile = CreateFileW(full_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
             if (hFile == INVALID_HANDLE_VALUE) {
                 DWORD err = GetLastError();
                 if (err == ERROR_SHARING_VIOLATION) {
-                    wprintf(L"WARN: File locked, skipping: %s\n", full_path);
+                    wprintf(L"WARN: File locked, skipping: %ls\n", full_path);
                     continue;
                 } else if (err == ERROR_ACCESS_DENIED) {
-                    wprintf(L"WARN: Access denied, skipping: %s\n", full_path);
+                    wprintf(L"WARN: Access denied, skipping: %ls\n", full_path);
                     continue;
                 }
             } else {
@@ -91,7 +99,7 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
             Document doc;
             doc.id = 0; // To be assigned by DB
             doc.path = full_path;
-            doc.size = ((uint64_t)find_data.nFileSizeHigh << 32) | find_data.nFileSizeLow;
+            doc.size = file_size;
             doc.timestamp = filetime_to_time_t(&find_data.ftLastWriteTime);
             
             const wchar_t *ext = wcsrchr(find_data.cFileName, L'.');

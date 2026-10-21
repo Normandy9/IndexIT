@@ -144,3 +144,23 @@ size_t hash_lookup_count(const HashTable *table, const char *key) {
     
     return 0;
 }
+
+#include <windows.h>
+double hash_insert_timed(HashTable *table, const char *key, Posting posting) {
+    LARGE_INTEGER start, end, freq;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    hash_insert(table, key, posting);
+    QueryPerformanceCounter(&end);
+    return (double)(end.QuadPart - start.QuadPart) / freq.QuadPart;
+}
+
+double hash_lookup_timed(const HashTable *table, const char *key, Posting **out_postings, size_t *out_count) {
+    LARGE_INTEGER start, end, freq;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    *out_postings = hash_lookup(table, key);
+    *out_count = hash_lookup_count(table, key);
+    QueryPerformanceCounter(&end);
+    return (double)(end.QuadPart - start.QuadPart) / freq.QuadPart;
+}

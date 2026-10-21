@@ -12,10 +12,13 @@ typedef struct Trie Trie;
 
 Trie *trie_create(void);
 void trie_destroy(Trie *trie);
-
 int trie_insert(Trie *trie, const char *term, Posting posting);
 Posting *trie_search(const Trie *trie, const char *term);
 size_t trie_search_count(const Trie *trie, const char *term);
+
+Posting* trie_prefix_search(const Trie *trie, const char *prefix, size_t *out_count);
+double trie_insert_timed(Trie *trie, const char *term, Posting posting);
+double trie_search_timed(const Trie *trie, const char *term, Posting **out_postings, size_t *out_count);
 
 #ifdef __cplusplus
 }

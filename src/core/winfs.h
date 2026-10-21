@@ -1,7 +1,7 @@
 #ifndef WINFS_H
 #define WINFS_H
 
-#include "document_dj.h"
+#include "document.h"
 
 #ifdef __cplusplus
 extern "C" {
