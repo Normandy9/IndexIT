@@ -6,6 +6,8 @@
 #include "inverted_index.h"
 #include "dataset.h"
 
+int ui_launch(const char *folder);
+
 static InvertedIndex *g_index = NULL;
 
 static void usage(const char *program)
@@ -17,6 +19,7 @@ static void usage(const char *program)
     printf("  %s benchmark <folder> <query>\n", program);
     printf("  %s stats\n", program);
     printf("  %s clean\n", program);
+    printf("  %s ui <folder>\n", program);
 }
 
 static int command_index(const char *folder)
@@ -325,6 +328,17 @@ int main(int argc, char **argv)
         else
         {
             result = command_clean();
+        }
+    }
+    else if (strcmp(argv[1], "ui") == 0)
+    {
+        if (argc < 3)
+        {
+            result = ui_launch(".");
+        }
+        else
+        {
+            result = ui_launch(argv[2]);
         }
     }
     else
