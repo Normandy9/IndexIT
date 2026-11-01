@@ -10,6 +10,8 @@
 #include "RAII.hpp"
 #include "BinaryIndexCache.hpp"
 #include "db.h"
+#include "SearchFilters.hpp"
+#include <cwchar>
 
 using namespace indexit;
 
@@ -18,7 +20,8 @@ void print_help() {
     std::cout << "Usage: indexit <command> [args]\n\n";
     std::cout << "Commands:\n";
     std::cout << "  index <dir> [--cache-dir <path>]          - Index a directory (incremental caching)\n";
-    std::cout << "  search <dir> <query> [--cache-dir <path>]   - Search documents (BM25 ranking, recorded in history)\n";
+    std::cout << "  search <dir> <query> [--ext .pdf] [--path-contains text] [--min-size bytes] [--max-size bytes]\n";
+    std::cout << "                                             - Search with optional metadata filters\n";
     std::cout << "  suggest <dir> <prefix> [--cache-dir <path>] - Autocomplete suggestions from Trie\n";
     std::cout << "  history [--cache-dir <path>]                - View SQLite search query history\n";
     std::cout << "  ui <dir>                                  - Launch interactive terminal UI\n";
@@ -49,6 +52,7 @@ int main(int argc_dummy, char** argv_dummy) {
     // Parse flags: --cache-dir <path>, --yes
     std::wstring cacheDir = BinaryIndexCache::getDefaultCacheDir();
     bool yesFlag = false;
+    SearchFilters searchFilters;
     std::vector<std::wstring> positionalArgs;
 
     for (int i = 2; i < argc; i++) {
@@ -57,6 +61,18 @@ int main(int argc_dummy, char** argv_dummy) {
             cacheDir = argv[++i];
         } else if (arg == L"--yes" || arg == L"-y") {
             yesFlag = true;
+        } else if (arg == L"--ext" && i + 1 < argc) {
+            searchFilters.extension = argv[++i];
+        } else if (arg == L"--path-contains" && i + 1 < argc) {
+            searchFilters.pathContains = argv[++i];
+        } else if (arg == L"--min-size" && i + 1 < argc) {
+            wchar_t* end = nullptr; unsigned long long v = wcstoull(argv[++i], &end, 10);
+            if (!end || *end != 0) { std::wcerr << L"Invalid --min-size value\n"; LocalFree(argv); return 2; }
+            searchFilters.minSize = static_cast<uint64_t>(v);
+        } else if (arg == L"--max-size" && i + 1 < argc) {
+            wchar_t* end = nullptr; unsigned long long v = wcstoull(argv[++i], &end, 10);
+            if (!end || *end != 0) { std::wcerr << L"Invalid --max-size value\n"; LocalFree(argv); return 2; }
+            searchFilters.maxSize = static_cast<uint64_t>(v);
         } else {
             positionalArgs.push_back(arg);
         }
@@ -131,10 +147,27 @@ int main(int argc_dummy, char** argv_dummy) {
 
                 Bm25Ranker ranker;
                 auto results = idx.search(query, ranker);
-                std::cout << "Found " << results.size() << " results for '" << query << "':\n";
+                std::vector<ScoredDocument> filteredResults;
+                for (const auto& res : results) {
+                    std::wstring path = idx.getPath(res.docId);
+                    WIN32_FILE_ATTRIBUTE_DATA fileData;
+                    uint64_t size = 0;
+                    if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fileData)) {
+                        size = (static_cast<uint64_t>(fileData.nFileSizeHigh) << 32) | fileData.nFileSizeLow;
+                    }
+                    if (searchFilters.matches(path, size)) filteredResults.push_back(res);
+                }
+                results.swap(filteredResults);
+                if (searchFilters.minSize > searchFilters.maxSize) {
+                    std::cout << "Invalid filters: --min-size cannot exceed --max-size.\n";
+                    return 2;
+                }
+                std::cout << "Found " << results.size() << " results for '" << query << "' after metadata filters:\n";
                 for (const auto& res : results) {
                     std::wcout << L"  Doc ID: " << res.docId << L" (Score: " << res.score << L") - "
                                << idx.getPath(res.docId) << L"\n";
+                    std::string snippet = idx.getSnippet(res.docId, query, 65);
+                    if (!snippet.empty()) std::cout << "    " << snippet << "\n";
                 }
                 if (results.empty()) {
                     std::istringstream words(query);
