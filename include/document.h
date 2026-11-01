@@ -22,7 +22,9 @@ typedef enum {
     FORMAT_XLSX,
     FORMAT_ODT,
     FORMAT_PDF,
-    FORMAT_ZIP
+    FORMAT_ZIP,
+    FORMAT_RTF,
+    FORMAT_EML
 } DocumentFormat;
 
 typedef struct {

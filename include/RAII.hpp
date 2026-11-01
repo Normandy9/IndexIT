@@ -3,6 +3,11 @@
 #include <string>
 #include "Exceptions.hpp"
 #include <chrono>
+#include <stdexcept>
+#include <cstdint>
+
+struct sqlite3;
+struct sqlite3_stmt;
 
 namespace indexit {
 
@@ -53,21 +58,75 @@ class ScopedTimer {
     Clock::time_point start;
     std::string name;
 public:
-    ScopedTimer(std::string n) : name(std::move(n)), start(Clock::now()) {}
-    ~ScopedTimer() {
-        // can be used for profiling
-    }
+    explicit ScopedTimer(std::string n = "") : name(std::move(n)), start(Clock::now()) {}
+    ~ScopedTimer() {}
     long long elapsedMs() const {
         return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
     }
+    double elapsedUs() const {
+        return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count());
+    }
+    double elapsedSec() const {
+        return std::chrono::duration<double>(Clock::now() - start).count();
+    }
+    void reset() {
+        start = Clock::now();
+    }
+    const std::string& getName() const { return name; }
+};
+
+class SqliteException : public std::runtime_error {
+public:
+    explicit SqliteException(const std::string& msg) : std::runtime_error(msg) {}
+};
+
+class SqliteStatement {
+private:
+    sqlite3_stmt* stmt = nullptr;
+public:
+    SqliteStatement(sqlite3* db, const std::string& sql);
+    ~SqliteStatement();
+    SqliteStatement(const SqliteStatement&) = delete;
+    SqliteStatement& operator=(const SqliteStatement&) = delete;
+
+    void bindInt64(int index, int64_t val);
+    void bindInt(int index, int val);
+    void bindText(int index, const std::string& val);
+    void bindWText(int index, const std::wstring& val);
+    bool step();
+    int64_t getInt64(int col);
+    int getInt(int col);
+    std::string getText(int col);
+    std::wstring getWText(int col);
+    void reset();
+    sqlite3_stmt* get() const { return stmt; }
+};
+
+class SqliteTransaction {
+private:
+    sqlite3* db;
+    bool committed = false;
+public:
+    explicit SqliteTransaction(sqlite3* db);
+    ~SqliteTransaction();
+    SqliteTransaction(const SqliteTransaction&) = delete;
+    SqliteTransaction& operator=(const SqliteTransaction&) = delete;
+
+    void commit();
+    void rollback();
 };
 
 class SqliteConnection {
-    struct sqlite3* db;
+private:
+    sqlite3* db = nullptr;
 public:
-    SqliteConnection(const std::string& path);
+    explicit SqliteConnection(const std::string& path);
     ~SqliteConnection();
-    struct sqlite3* get() const { return db; }
+    SqliteConnection(const SqliteConnection&) = delete;
+    SqliteConnection& operator=(const SqliteConnection&) = delete;
+
+    sqlite3* get() const { return db; }
+    void execute(const std::string& sql);
 };
 
 } // namespace indexit

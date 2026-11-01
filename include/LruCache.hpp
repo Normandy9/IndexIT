@@ -1,6 +1,8 @@
 #pragma once
 #include <unordered_map>
 #include <list>
+#include <utility>
+#include <cstddef>
 
 namespace indexit {
 
@@ -12,7 +14,7 @@ private:
     std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> map_;
 
 public:
-    explicit LruCache(size_t capacity) : capacity_(capacity) {}
+    explicit LruCache(size_t capacity = 1000) : capacity_(capacity) {}
 
     bool get(const K& key, V& out_value) {
         auto it = map_.find(key);
@@ -32,7 +34,7 @@ public:
             return;
         }
 
-        if (items_.size() >= capacity_) {
+        if (items_.size() >= capacity_ && capacity_ > 0) {
             auto last = items_.back();
             map_.erase(last.first);
             items_.pop_back();
@@ -49,9 +51,31 @@ public:
             map_.erase(it);
         }
     }
+
+    bool contains(const K& key) const {
+        return map_.find(key) != map_.end();
+    }
+
+    void clear() {
+        items_.clear();
+        map_.clear();
+    }
     
-    size_t size() {
+    size_t size() const {
         return items_.size();
+    }
+
+    size_t capacity() const {
+        return capacity_;
+    }
+
+    void setCapacity(size_t cap) {
+        capacity_ = cap;
+        while (items_.size() > capacity_ && !items_.empty()) {
+            auto last = items_.back();
+            map_.erase(last.first);
+            items_.pop_back();
+        }
     }
 };
 

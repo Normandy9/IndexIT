@@ -12,7 +12,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Ensure unicode path handling for Windows APIs
 add_compile_definitions(UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
-#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -municode")
 
 set(SOURCES
     src/main.cpp
@@ -26,8 +25,13 @@ set(SOURCES
     src/IRanker.cpp
     src/ITermIndex.cpp
     src/CppInvertedIndex.cpp
+    src/cache/BinaryIndexCache.cpp
     src/db.cpp
     src/UI.cpp
+    third_party/sqlite3/sqlite3.c
+    third_party/miniz/miniz.c
+    third_party/miniz/miniz_tdef.c
+    third_party/miniz/miniz_tinfl.c
 )
 
 add_executable(indexit ${SOURCES})
@@ -36,7 +40,10 @@ target_include_directories(indexit PRIVATE
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/src/core
     ${PROJECT_SOURCE_DIR}/src/index
+    ${PROJECT_SOURCE_DIR}/src/cache
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/third_party/sqlite3
+    ${PROJECT_SOURCE_DIR}/third_party/miniz
 )
 
 enable_testing()
@@ -53,12 +60,23 @@ add_executable(test_runner
     src/IRanker.cpp
     src/ITermIndex.cpp
     src/CppInvertedIndex.cpp
+    src/cache/BinaryIndexCache.cpp
     src/db.cpp
+    third_party/sqlite3/sqlite3.c
+    third_party/miniz/miniz.c
+    third_party/miniz/miniz_tdef.c
+    third_party/miniz/miniz_tinfl.c
 )
 
 target_include_directories(test_runner PRIVATE
     ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/src/core
+    ${PROJECT_SOURCE_DIR}/src/index
+    ${PROJECT_SOURCE_DIR}/src/cache
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/third_party/sqlite3
+    ${PROJECT_SOURCE_DIR}/third_party/miniz
 )
 
 add_test(NAME IndexItTests COMMAND test_runner)
+target_compile_definitions(test_runner PRIVATE INDEXIT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

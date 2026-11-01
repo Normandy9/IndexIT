@@ -14,6 +14,11 @@ struct Tokenizer {
 static char **dynamic_stopwords = NULL;
 static int num_dynamic_stopwords = 0;
 
+static int is_word_byte(unsigned char c) {
+    /* Keep UTF-8 multibyte bytes together; full Unicode category handling is not available in C locale. */
+    return c >= 0x80 || isalnum(c);
+}
+
 static const char *DEFAULT_STOPWORDS[] = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", 
     "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", 
@@ -36,7 +41,11 @@ void tokenizer_init_stopwords(const char *filepath) {
             len--;
         }
         if (len > 0) {
-            dynamic_stopwords[num_dynamic_stopwords++] = strdup(buffer);
+            char *copy = (char*)malloc(len + 1);
+            if (copy) {
+                memcpy(copy, buffer, len + 1);
+                dynamic_stopwords[num_dynamic_stopwords++] = copy;
+            }
         }
     }
     fclose(f);
@@ -76,7 +85,7 @@ int tokenizer_next(Tokenizer *tokenizer, Token *out_token) {
     
     while (tokenizer->text[tokenizer->offset] != '\0') {
         // Skip non-alphanumeric
-        while (tokenizer->text[tokenizer->offset] != '\0' && !isalnum((unsigned char)tokenizer->text[tokenizer->offset])) {
+        while (tokenizer->text[tokenizer->offset] != '\0' && !is_word_byte((unsigned char)tokenizer->text[tokenizer->offset])) {
             tokenizer->offset++;
         }
         
@@ -86,7 +95,7 @@ int tokenizer_next(Tokenizer *tokenizer, Token *out_token) {
         size_t start = tokenizer->offset;
         
         // Find end of token
-        while (tokenizer->text[tokenizer->offset] != '\0' && isalnum((unsigned char)tokenizer->text[tokenizer->offset])) {
+        while (tokenizer->text[tokenizer->offset] != '\0' && is_word_byte((unsigned char)tokenizer->text[tokenizer->offset])) {
             tokenizer->offset++;
         }
         
@@ -96,7 +105,8 @@ int tokenizer_next(Tokenizer *tokenizer, Token *out_token) {
             if (!word) return 0;
             
             for (size_t i = 0; i < len; i++) {
-                word[i] = (char)tolower((unsigned char)tokenizer->text[start + i]);
+                unsigned char c = (unsigned char)tokenizer->text[start + i];
+                word[i] = c < 0x80 ? (char)tolower(c) : (char)c;
             }
             word[len] = '\0';
             

@@ -16,17 +16,47 @@ public:
     std::string extract(const std::wstring& filepath) override;
 };
 
+class HtmlExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
+class RtfExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
+class EmlExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
 class DocxExtractor : public IExtractor {
 public:
     std::string extract(const std::wstring& filepath) override;
 };
 
-class PdfExtractor : public IExtractor {
+class PptxExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
+class XlsxExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
+class OdtExtractor : public IExtractor {
 public:
     std::string extract(const std::wstring& filepath) override;
 };
 
 class ZipExtractor : public IExtractor {
+public:
+    std::string extract(const std::wstring& filepath) override;
+};
+
+class PdfExtractor : public IExtractor {
 public:
     std::string extract(const std::wstring& filepath) override;
 };

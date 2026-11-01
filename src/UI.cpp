@@ -11,11 +11,11 @@ void StatusBar::draw(HANDLE hConsole, int width, int height) {
     SetConsoleTextAttribute(hConsole, ThemeManager::getStatusColor());
     
     std::string line = text_;
-    if (line.size() < width) line.append(width - line.size(), ' ');
-    else if (line.size() > width) line = line.substr(0, width);
+    if (line.size() < static_cast<size_t>(width)) line.append(width - line.size(), ' ');
+    else if (line.size() > static_cast<size_t>(width)) line = line.substr(0, width);
     
     DWORD written;
-    WriteConsoleA(hConsole, line.c_str(), line.size(), &written, nullptr);
+    WriteConsoleA(hConsole, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
     SetConsoleTextAttribute(hConsole, ThemeManager::getDefaultColor());
 }
 
@@ -24,24 +24,26 @@ void ResultView::draw(HANDLE hConsole, int width, int startY, int maxLines) {
     for (int i = 0; i < maxLines; i++) {
         COORD pos = {0, static_cast<SHORT>(startY + i)};
         SetConsoleCursorPosition(hConsole, pos);
-        std::string clearLine(width, ' ');
+        std::string clearLine(width > 0 ? width : 1, ' ');
         DWORD written;
-        WriteConsoleA(hConsole, clearLine.c_str(), clearLine.size(), &written, nullptr);
+        WriteConsoleA(hConsole, clearLine.c_str(), static_cast<DWORD>(clearLine.size()), &written, nullptr);
         SetConsoleCursorPosition(hConsole, pos);
         
-        if (i < results_.size()) {
+        if (static_cast<size_t>(i) < results_.size()) {
             const auto& res = results_[i];
             std::wstring wpath = index_->getPath(res.docId);
-            std::string path(wpath.begin(), wpath.end()); // simple convert for UI display
+            std::string path(wpath.begin(), wpath.end());
             
             SetConsoleTextAttribute(hConsole, ThemeManager::getHighlightColor());
             std::string scoreStr = std::to_string(res.score);
-            WriteConsoleA(hConsole, scoreStr.c_str(), scoreStr.size(), &written, nullptr);
+            WriteConsoleA(hConsole, scoreStr.c_str(), static_cast<DWORD>(scoreStr.size()), &written, nullptr);
             
             SetConsoleTextAttribute(hConsole, ThemeManager::getDefaultColor());
             std::string text = " - " + path;
-            if (text.size() > width - 10) text = text.substr(0, width - 10);
-            WriteConsoleA(hConsole, text.c_str(), text.size(), &written, nullptr);
+            if (width > 10 && text.size() > static_cast<size_t>(width - 10)) {
+                text = text.substr(0, width - 10);
+            }
+            WriteConsoleA(hConsole, text.c_str(), static_cast<DWORD>(text.size()), &written, nullptr);
         }
     }
 }
@@ -68,12 +70,12 @@ void InputHandler::draw(HANDLE hConsole, int width) {
     
     std::string prompt = "Search: " + query_;
     std::string clearLine = prompt;
-    if (clearLine.size() < width) clearLine.append(width - clearLine.size(), ' ');
+    if (clearLine.size() < static_cast<size_t>(width)) clearLine.append(width - clearLine.size(), ' ');
     
     DWORD written;
-    WriteConsoleA(hConsole, clearLine.c_str(), clearLine.size(), &written, nullptr);
+    WriteConsoleA(hConsole, clearLine.c_str(), static_cast<DWORD>(clearLine.size()), &written, nullptr);
     
-    pos.X = prompt.size();
+    pos.X = static_cast<SHORT>(prompt.size());
     SetConsoleCursorPosition(hConsole, pos);
 }
 
@@ -87,46 +89,11 @@ App::~App() {
     SetConsoleTextAttribute(hConsole_, ThemeManager::getDefaultColor());
 }
 
-extern "C" {
-#include "winfs.h"
-#include "extractor.h"
-#include "token.h"
-}
-
-// Trampoline for winfs
-static CppInvertedIndex* g_index_ptr = nullptr;
-static int cpp_index_callback(const Document* doc, void* user_data) {
-    if (doc->format == FORMAT_UNKNOWN) return 0;
-    
-    char* text = extract_text(doc);
-    if (text) {
-        uint64_t docId = g_index_ptr->addDocument(doc->path);
-        
-        Tokenizer* tok = tokenizer_create(text);
-        uint32_t len = 0;
-        if (tok) {
-            Token token;
-            while (tokenizer_next(tok, &token)) {
-                g_index_ptr->addTerm(token.text, docId, 1); // simplistic freq=1 per add
-                free(token.text);
-                len++;
-            }
-            tokenizer_destroy(tok);
-        }
-        g_index_ptr->setDocumentLength(docId, len);
-        free(text);
-    }
-    return 0;
-}
-
 void App::doIndex(const std::wstring& path) {
-    g_index_ptr = &index_;
-    extractor_init();
     status_.setText("Indexing...");
     render();
-    winfs_walk_directory(path.c_str(), cpp_index_callback, nullptr);
+    index_.indexDirectory(path);
     status_.setText("Ready. Indexed " + std::to_string(index_.getTotalDocs()) + " documents.");
-    extractor_cleanup();
 }
 
 void App::updateSearch() {
@@ -143,8 +110,44 @@ void App::render() {
     GetConsoleScreenBufferInfo(hConsole_, &csbi);
     int width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
     int height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    if (width <= 0) width = 80;
+    if (height <= 0) height = 25;
     
     input_.draw(hConsole_, width);
+
+    // Live suggestions bar on line 1
+    COORD sugPos = {0, 1};
+    SetConsoleCursorPosition(hConsole_, sugPos);
+    std::string q = input_.getQuery();
+    std::string lastWord;
+    if (!q.empty()) {
+        size_t lastSpace = q.find_last_of(" \t");
+        if (lastSpace == std::string::npos) lastWord = q;
+        else lastWord = q.substr(lastSpace + 1);
+    }
+
+    std::string sugLine = "Suggestions: ";
+    if (!lastWord.empty()) {
+        auto suggestions = index_.suggest(lastWord, 4);
+        if (!suggestions.empty()) {
+            for (const auto& s : suggestions) {
+                sugLine += s.first + " (" + std::to_string(s.second) + ")  ";
+            }
+        } else {
+            sugLine += "(none)";
+        }
+    } else {
+        sugLine += "(type to see live suggestions)";
+    }
+
+    if (sugLine.size() < static_cast<size_t>(width)) sugLine.append(width - sugLine.size(), ' ');
+    else if (sugLine.size() > static_cast<size_t>(width)) sugLine = sugLine.substr(0, width);
+
+    SetConsoleTextAttribute(hConsole_, ThemeManager::getHighlightColor());
+    DWORD written;
+    WriteConsoleA(hConsole_, sugLine.c_str(), static_cast<DWORD>(sugLine.size()), &written, nullptr);
+    SetConsoleTextAttribute(hConsole_, ThemeManager::getDefaultColor());
+
     results_.draw(hConsole_, width, 2, height - 3);
     status_.draw(hConsole_, width, height);
     
@@ -157,7 +160,6 @@ void App::run() {
     GetConsoleMode(hStdin_, &mode);
     SetConsoleMode(hStdin_, mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
 
-    // Clear screen
     system("cls");
     status_.setText("Ready. Type to search. ESC to quit.");
     

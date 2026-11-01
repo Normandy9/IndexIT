@@ -1,28 +1,30 @@
-#ifndef INDEXIT_DB_H
-#define INDEXIT_DB_H
+#pragma once
+#include <string>
+#include <vector>
+#include <cstdint>
+#include "RAII.hpp"
+#include "DocumentStore.hpp"
 
-/*
- * Initial database schema plan for IndexIt.
- *
- * This file is only a schema sketch.
- * SQLite/database implementation will be added later.
- *
- * Planned table: documents
- * ------------------------
- * id              INTEGER PRIMARY KEY
- * path            TEXT NOT NULL
- * filename        TEXT NOT NULL
- * type            TEXT
- * size            INTEGER
- * modified_date   TEXT
- *
- * Planned table: terms
- * --------------------
- * id              INTEGER PRIMARY KEY
- * term            TEXT NOT NULL UNIQUE
- *
- * Future work may add a relationship/posting table to connect
- * terms with documents as the inverted index is implemented.
- */
+namespace indexit {
 
-#endif /* INDEXIT_DB_H */
+struct SearchHistoryRecord {
+    int id;
+    std::string query;
+    std::string timestamp;
+    int resultCount;
+};
+
+class DatabaseManager {
+private:
+    SqliteConnection conn_;
+public:
+    explicit DatabaseManager(const std::string& dbPath);
+    void initSchema();
+    void saveDocuments(const DocumentStore& store);
+    void loadDocuments(DocumentStore& store);
+    void recordManifest(const std::string& path, uint64_t size, const std::string& created);
+    void recordSearchHistory(const std::string& query, int resultCount);
+    std::vector<SearchHistoryRecord> getSearchHistory(int limit = 50);
+};
+
+} // namespace indexit

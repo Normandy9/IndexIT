@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+int _wcsicmp(const wchar_t *s1, const wchar_t *s2);
+
 static DocumentFormat get_format_from_ext(const wchar_t *ext) {
     if (!ext) return FORMAT_UNKNOWN;
     if (_wcsicmp(ext, L".txt") == 0) return FORMAT_TXT;
@@ -13,7 +15,7 @@ static DocumentFormat get_format_from_ext(const wchar_t *ext) {
     if (_wcsicmp(ext, L".md") == 0) return FORMAT_MD;
     if (_wcsicmp(ext, L".json") == 0) return FORMAT_JSON;
     if (_wcsicmp(ext, L".xml") == 0) return FORMAT_XML;
-    if (_wcsicmp(ext, L".html") == 0) return FORMAT_HTML;
+    if (_wcsicmp(ext, L".html") == 0 || _wcsicmp(ext, L".htm") == 0) return FORMAT_HTML;
     if (_wcsicmp(ext, L".c") == 0) return FORMAT_C;
     if (_wcsicmp(ext, L".cpp") == 0) return FORMAT_CPP;
     if (_wcsicmp(ext, L".h") == 0) return FORMAT_H;
@@ -23,6 +25,8 @@ static DocumentFormat get_format_from_ext(const wchar_t *ext) {
     if (_wcsicmp(ext, L".odt") == 0) return FORMAT_ODT;
     if (_wcsicmp(ext, L".pdf") == 0) return FORMAT_PDF;
     if (_wcsicmp(ext, L".zip") == 0) return FORMAT_ZIP;
+    if (_wcsicmp(ext, L".rtf") == 0) return FORMAT_RTF;
+    if (_wcsicmp(ext, L".eml") == 0) return FORMAT_EML;
     return FORMAT_UNKNOWN;
 }
 
@@ -37,7 +41,7 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
     if (!path || !callback) return -1;
     
     wchar_t search_path[MAX_PATH * 4];
-    if (wcslen(path) + 3 >= MAX_PATH * 4) return -1; // Path too long
+    if (wcslen(path) + 3 >= MAX_PATH * 4) return -1;
     
     _snwprintf(search_path, MAX_PATH * 4, L"%ls\\*", path);
     
@@ -49,7 +53,7 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
         if (err == ERROR_ACCESS_DENIED) {
             wprintf(L"WARN: Access denied to directory: %s\n", path);
         }
-        return 0; // Skip unreadable directories
+        return 0;
     }
     
     int result = 0;
@@ -59,7 +63,6 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
             continue;
         }
         
-        // Skip hidden, system files, and symlinks/junctions (to prevent loops)
         if (find_data.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_REPARSE_POINT)) {
             continue;
         }
@@ -68,20 +71,16 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
         _snwprintf(full_path, MAX_PATH * 4, L"%ls\\%ls", path, find_data.cFileName);
         
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            // Recurse
             result = winfs_walk_directory(full_path, callback, user_data);
             if (result != 0) break;
         } else {
             uint64_t file_size = ((uint64_t)find_data.nFileSizeHigh << 32) | find_data.nFileSizeLow;
             
-            // Skip files over 50MB to prevent memory exhaustion
             if (file_size > 50 * 1024 * 1024) {
                 wprintf(L"WARN: File too large (>50MB), skipping: %ls\n", full_path);
                 continue;
             }
 
-            // We found a file
-            // Attempt to open it briefly to check for sharing violation
             HANDLE hFile = CreateFileW(full_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
             if (hFile == INVALID_HANDLE_VALUE) {
                 DWORD err = GetLastError();
@@ -97,7 +96,7 @@ int winfs_walk_directory(const wchar_t *path, FileDiscoveryCallback callback, vo
             }
             
             Document doc;
-            doc.id = 0; // To be assigned by DB
+            doc.id = 0;
             doc.path = full_path;
             doc.size = file_size;
             doc.timestamp = filetime_to_time_t(&find_data.ftLastWriteTime);
