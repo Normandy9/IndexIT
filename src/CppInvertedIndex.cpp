@@ -1,6 +1,7 @@
 #include "CppInvertedIndex.hpp"
 #include "IExtractor.hpp"
 #include "token.h"
+#include "SearchSnippet.hpp"
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -47,7 +48,7 @@ bool CppInvertedIndex::indexDocument(const Document* doc) {
     std::string text = extractor->extract(doc->path);
     if (text.empty()) return false;
 
-    uint64_t docId = addDocument(doc->path);
+    uint64_t docId = docStore_.addDocument(doc->path, doc->size, static_cast<uint64_t>(doc->timestamp), doc->format);
     Tokenizer* tok = tokenizer_create(text.c_str());
     uint32_t len = 0;
     if (tok) {
@@ -86,6 +87,16 @@ int CppInvertedIndex::indexDirectory(const std::wstring& dirPath, std::function<
     }
     IndexCallbackContext ctx{this, progressCb};
     return winfs_walk_directory(dirPath.c_str(), shared_index_callback, &ctx);
+}
+
+
+std::string CppInvertedIndex::getSnippet(uint64_t docId, const std::string& query, size_t context) const {
+    const DocMetadata* metadata = docStore_.getMetadata(docId);
+    if (!metadata) return {};
+    std::unique_ptr<IExtractor> extractor = ExtractorFactory::create(metadata->format);
+    if (!extractor) return {};
+    const std::string extracted = extractor->extract(metadata->path);
+    return makeSearchSnippet(extracted, query, context);
 }
 
 struct ScoreCompare {
