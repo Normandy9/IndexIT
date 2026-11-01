@@ -1,149 +1,55 @@
 # IndexIt
 
-**IndexIt: Optimized Local Document Search Engine for Windows**
+IndexIt is a Windows-native local document content search prototype written in C and C++17. It walks a directory, extracts supported document text, builds an inverted index, and ranks AND queries with BM25.
 
-This repository contains the IndexIt project foundation plus the Phase 2 query/CLI/benchmark integration.
+## Features currently implemented
 
-## Phase 2 contribution
+- Win32 directory walking and a C++ indexing/search path.
+- FNV-1a hash index with resizing and sorted postings; trie prefix search and suggestions.
+- BM25 ranking, multi-term AND queries, top-K results, and CLI/UI entry points.
+- Binary `index.cache` persistence with checksum, atomic replacement, incremental metadata checks, free-space guard, manifest, and confirmed clean operation.
+- SQLite metadata and search history (`indexit.db`).
+- Text, DOCX, PPTX, XLSX, ODT, ZIP-contained text, RTF, EML, HTML, and limited PDF extraction.
+- UTF-8 byte-preserving tokenization and UTF-16 BOM text decoding.
 
-The current Phase 2 work provides:
+## Project layout
 
-- `query.c` with the `run_query()` search interface
-- Exact-term lookup through the project `InvertedIndex` API
-- `main.c` CLI handling for:
-  - `index`
-  - `search`
-  - `stats`
-  - `clean`
-- High-resolution benchmark timing through:
-  - `timer_start()`
-  - `timer_stop_ms()`
-- A small in-memory index implementation so the query layer can be compiled and tested while the full indexing pipeline is still under development
-- CMake integration and basic tests
+- `src/core/`: Win32 walker, tokenizer, and legacy C extraction interface.
+- `src/index/`: C hash table, trie, and inverted-index primitives.
+- `src/`: C++ extractors, index, ranker, CLI/UI, binary cache, and SQLite manager.
+- `include/`: public interfaces and data structures.
+- `third_party/sqlite3/`, `third_party/miniz/`: vendored SQLite and miniz.
+- `tests/`: CTest test runner and generated format fixtures in `data/test_fixtures/`.
+- `docs/`: baseline, decisions, architecture, class guide, completion report, and known issues.
 
-## Current query flow
+## Prerequisites and build
 
-```text
-CLI
- |
- +-- search <query>
-       |
-       +-- timer_start()
-       |
-       +-- run_query(query)
-              |
-              +-- index_lookup()
-       |
-       +-- timer_stop_ms()
-```
+Windows with MinGW GCC/G++ and CMake. The verified workspace toolchain is MinGW.org GCC 6.3.0 and the portable CMake 3.29.3 in `tools/cmake`.
 
-The final production flow is expected to replace the temporary integration index with the team's full:
-
-```text
-File Walker
-   -> Format Adapter / Text Extraction
-   -> Tokenization
-   -> Inverted Index
-   -> Query Engine
-   -> Ranking
-   -> Results
+```powershell
+.\tools\cmake\bin\cmake.exe -S . -B build -G 'MinGW Makefiles'
+.\tools\cmake\bin\cmake.exe --build build -j2
+.\tools\cmake\bin\ctest.exe --test-dir build --output-on-failure
 ```
 
 ## CLI
 
 ```text
-indexit index <folder>
-indexit search <query>
-indexit stats
-indexit clean
+indexit --help
+indexit index <dir> [--cache-dir <path>]
+indexit search <dir> <query> [--cache-dir <path>]
+indexit suggest <dir> <prefix> [--cache-dir <path>]
+indexit stats <dir> [--cache-dir <path>]
+indexit history [--cache-dir <path>]
+indexit clean [--cache-dir <path>] [--yes]
+indexit ui <dir>
 ```
 
-The `stats` and `clean` commands currently remain integration placeholders because their corresponding production modules are not present in this repository branch.
+The default cache directory is `%LOCALAPPDATA%\IndexIt`. `clean` lists manifest-tracked files and sizes before prompting; `--yes` skips the prompt. Search results require an index, which is loaded from the cache or built from the supplied directory.
 
-## Build
+## Known limitations
 
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-Run tests:
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-On Windows with Visual Studio:
-
-```text
-build/Debug/indexit.exe
-```
-
-Example:
-
-```bash
-.\build\Debug\indexit.exe search machine
-```
-
-## Benchmarking
-
-The timer measures elapsed search time in milliseconds:
-
-```c
-timer_start();
-run_query("machine");
-double elapsed_ms = timer_stop_ms();
-```
-
-For the actual project benchmark, use the same document dataset and query set for both:
-
-```text
-Sequential Search
-        vs
-Indexed Search (IndexIt)
-```
-
-Run repeated trials and report the measured values rather than hard-coded/example numbers.
-
-Recommended benchmark dimensions:
-
-- 1,000 documents
-- 5,000 documents
-- 10,000 documents
-- repeated queries
-- cold-cache and warm-cache measurements once the cache layer is integrated
-
-## Important implementation note
-
-The repository currently does not contain the full document walker, format extraction, persistent SQLite layer, ranking implementation, or production cache implementation. The small in-memory index in `src/index/index.c` exists only to make the Phase 2 query/CLI code testable now. It should be replaced/connected to the team's production indexing module when that module is merged.
-
-## Project structure
-
-```text
-IndexIT/
-├── CMakeLists.txt
-├── README.md
-├── include/
-│   ├── benchmark.h
-│   ├── document.h
-│   ├── hashtable.h
-│   ├── inverted_index.h
-│   ├── query.h
-│   ├── token.h
-│   └── trie.h
-├── src/
-│   ├── main.c
-│   ├── benchmark/
-│   │   ├── benchmark.c
-│   │   └── benchmark.h
-│   ├── index/
-│   │   ├── index.c
-│   │   └── index.h
-│   ├── query/
-│   │   ├── query.c
-│   │   └── query.h
-│   ├── cache.h
-│   └── db.h
-└── tests/
-    └── test_runner.c
-```
+- PDF extraction is a fallback parser for simple literal strings in uncompressed and FlateDecode streams. It is not a general PDF parser and has no OCR, robust font maps, object-stream support, or encrypted-PDF support.
+- Step 6 filters, snippets/highlighting, duplicate detection, and UI filter controls are incomplete. Fuzzy matching currently enumerates indexed terms rather than using trie pruning.
+- Unicode support preserves UTF-8 multibyte sequences but does not implement full Unicode category classification or case folding. Long-path prefix handling and complete wide-console UI output need further work.
+- The full benchmark suite, Windows Search comparison, charts/report, expanded fuzz and integration tests, and Step 10 server mode are not implemented. See `docs/COMPLETION_REPORT.md` and `docs/KNOWN_ISSUES.md`.
