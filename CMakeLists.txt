@@ -80,3 +80,21 @@ target_include_directories(test_runner PRIVATE
 
 add_test(NAME IndexItTests COMMAND test_runner)
 target_compile_definitions(test_runner PRIVATE INDEXIT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# Optional Phase 3 utilities use std::filesystem (C++17). Keep them opt-in so
+# the legacy MinGW GCC 6.3 toolchain can still build the core application.
+option(INDEXIT_BUILD_MODERN_PHASE3_TOOLS
+       "Build Phase 3 integration tests and duplicate scanner (requires std::filesystem support)" OFF)
+
+if(INDEXIT_BUILD_MODERN_PHASE3_TOOLS)
+    add_executable(phase3_integration_tests tests/test_phase3_integration.cpp)
+    target_include_directories(phase3_integration_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    add_test(NAME Phase3IntegrationTests COMMAND phase3_integration_tests)
+
+    add_executable(duplicate_detector_tests tests/test_duplicate_detector.cpp)
+    target_include_directories(duplicate_detector_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    add_test(NAME DuplicateDetectorTests COMMAND duplicate_detector_tests)
+
+    add_executable(indexit_duplicates tools/duplicates_main.cpp)
+    target_include_directories(indexit_duplicates PRIVATE ${PROJECT_SOURCE_DIR}/include)
+endif()
