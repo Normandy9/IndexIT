@@ -1,34 +1,30 @@
-#include "QueryParser.hpp"
-#include "SnippetBuilder.hpp"
-#include "ResultExporter.hpp"
+#include "DocumentStats.hpp"
+#include "RankingMetrics.hpp"
+#include "SearchAnalytics.hpp"
 
 #include <iostream>
 #include <vector>
 
 int main() {
-    paras_phase3::QueryParser parser;
-    paras_phase3::QueryPlan plan =
-        parser.parse("machine learning -draft type:txt path:notes");
+    paras_advanced::DocumentStats analyzer;
+    paras_advanced::DocumentStatistics stats =
+        analyzer.analyze("IndexIt searches local documents.\nIt ranks useful results.");
 
-    if (!plan.valid()) {
-        for (std::size_t i = 0; i < plan.errors.size(); ++i) {
-            std::cerr << plan.errors[i] << "\n";
-        }
-        return 1;
-    }
+    std::cout << "Words: " << stats.words << "\n";
+    std::cout << "Lines: " << stats.lines << "\n";
+    std::cout << "Average word length: " << stats.averageWordLength << "\n";
 
-    std::cout << "Required terms: " << plan.requiredTerms.size() << "\n";
-    std::cout << "Excluded terms: " << plan.excludedTerms.size() << "\n";
-    std::cout << "Extension: " << plan.extension << "\n";
-    std::cout << "Path contains: " << plan.pathContains << "\n";
+    std::vector<std::string> returned;
+    returned.push_back("doc1");
+    returned.push_back("doc2");
+    std::vector<std::string> relevant;
+    relevant.push_back("doc1");
+    relevant.push_back("doc3");
 
-    paras_phase3::SnippetBuilder builder;
-    std::vector<std::string> terms;
-    terms.push_back("learning");
-    paras_phase3::Snippet preview =
-        builder.build("IndexIt helps users search local documents. "
-                      "Machine learning and data retrieval are useful topics.",
-                      terms, 100);
-    std::cout << "Preview: " << preview.text << "\n";
+    paras_advanced::RankingMetrics metrics;
+    paras_advanced::RankingScore score = metrics.evaluate(returned, relevant);
+    std::cout << "Precision: " << score.precision << "\n";
+    std::cout << "Recall: " << score.recall << "\n";
+    std::cout << "F1: " << score.f1 << "\n";
     return 0;
 }
