@@ -1,55 +1,55 @@
-# IndexIt
+# Paras Phase III Add-on Modules (Non-invasive)
 
-IndexIt is a Windows-native local document content search prototype written in C and C++17. It walks a directory, extracts supported document text, builds an inverted index, and ranks AND queries with BM25.
+This package adds independent utilities for IndexIt without modifying the existing
+IndexIt source files, CMake configuration, executable, database schema, cache format,
+or search behaviour.
 
-## Features currently implemented
+## Safety boundary
 
-- Win32 directory walking and a C++ indexing/search path.
-- FNV-1a hash index with resizing and sorted postings; trie prefix search and suggestions.
-- BM25 ranking, multi-term AND queries, top-K results, and CLI/UI entry points.
-- Binary `index.cache` persistence with checksum, atomic replacement, incremental metadata checks, free-space guard, manifest, and confirmed clean operation.
-- SQLite metadata and search history (`indexit.db`).
-- Text, DOCX, PPTX, XLSX, ODT, ZIP-contained text, RTF, EML, HTML, and limited PDF extraction.
-- UTF-8 byte-preserving tokenization and UTF-16 BOM text decoding.
+- Copy this folder into the repository as `paras_phase3_addons/`.
+- Do not overwrite any existing file.
+- The add-on has its own `CMakeLists.txt` and its own test executable.
+- It is not linked to `indexit` and does not change the current application.
+- Integration into the main application should happen only after separate review.
 
-## Project layout
+## Modules
 
-- `src/core/`: Win32 walker, tokenizer, and legacy C extraction interface.
-- `src/index/`: C hash table, trie, and inverted-index primitives.
-- `src/`: C++ extractors, index, ranker, CLI/UI, binary cache, and SQLite manager.
-- `include/`: public interfaces and data structures.
-- `third_party/sqlite3/`, `third_party/miniz/`: vendored SQLite and miniz.
-- `tests/`: CTest test runner and generated format fixtures in `data/test_fixtures/`.
-- `docs/`: baseline, decisions, architecture, class guide, completion report, and known issues.
+1. `QueryParser` — validates and parses a small, documented query syntax.
+2. `MetadataFilter` — filters caller-provided metadata records by extension,
+   size range, and path substring.
+3. `SnippetBuilder` — creates short text previews and marks query-term matches.
+4. `ResultExporter` — exports result records as CSV or JSON with proper escaping.
+5. `StringUtilities` — trimming, ASCII case folding, and safe extension normalization.
 
-## Prerequisites and build
+These modules operate on plain C++ data structures. They do not access the file
+system, database, cache, or Windows APIs.
 
-Windows with MinGW GCC/G++ and CMake. The verified workspace toolchain is MinGW.org GCC 6.3.0 and the portable CMake 3.29.3 in `tools/cmake`.
+## Build separately
+
+From this folder:
 
 ```powershell
-.\tools\cmake\bin\cmake.exe -S . -B build -G 'MinGW Makefiles'
-.\tools\cmake\bin\cmake.exe --build build -j2
-.\tools\cmake\bin\ctest.exe --test-dir build --output-on-failure
+cmake -S . -B build
+cmake --build build --config Release
+ctest --test-dir build --output-on-failure
 ```
 
-## CLI
+A C++11-compatible compiler is sufficient. The package deliberately avoids
+`std::filesystem` so it can be built separately with older MinGW toolchains.
 
-```text
-indexit --help
-indexit index <dir> [--cache-dir <path>]
-indexit search <dir> <query> [--cache-dir <path>]
-indexit suggest <dir> <prefix> [--cache-dir <path>]
-indexit stats <dir> [--cache-dir <path>]
-indexit history [--cache-dir <path>]
-indexit clean [--cache-dir <path>] [--yes]
-indexit ui <dir>
-```
+## Query syntax
 
-The default cache directory is `%LOCALAPPDATA%\IndexIt`. `clean` lists manifest-tracked files and sizes before prompting; `--yes` skips the prompt. Search results require an index, which is loaded from the cache or built from the supplied directory.
+- `machine learning` — two positive terms
+- `"machine learning"` — one quoted phrase
+- `-draft` — excluded term
+- `type:txt` — extension filter
+- `path:notes` — path substring filter
 
-## Known limitations
+The parser is a utility only. The existing IndexIt CLI does not automatically
+use this syntax until a developer explicitly integrates it.
 
-- PDF extraction is a fallback parser for simple literal strings in uncompressed and FlateDecode streams. It is not a general PDF parser and has no OCR, robust font maps, object-stream support, or encrypted-PDF support.
-- Step 6 filters, snippets/highlighting, duplicate detection, and UI filter controls are incomplete. Fuzzy matching currently enumerates indexed terms rather than using trie pruning.
-- Unicode support preserves UTF-8 multibyte sequences but does not implement full Unicode category classification or case folding. Long-path prefix handling and complete wide-console UI output need further work.
-- The full benchmark suite, Windows Search comparison, charts/report, expanded fuzz and integration tests, and Step 10 server mode are not implemented. See `docs/COMPLETION_REPORT.md` and `docs/KNOWN_ISSUES.md`.
+## Integration policy
+
+Do not change the existing `CMakeLists.txt`. Build this folder independently.
+When ready, a developer can review the APIs and selectively connect them to
+existing application code. The original executable remains unaffected.
