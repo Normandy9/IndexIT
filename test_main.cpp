@@ -1,100 +1,88 @@
-#include "StringUtilities.hpp"
-#include "QueryParser.hpp"
-#include "MetadataFilter.hpp"
-#include "SnippetBuilder.hpp"
-#include "ResultExporter.hpp"
+#include "DocumentStats.hpp"
+#include "SearchAnalytics.hpp"
+#include "ResultDeduplicator.hpp"
+#include "RankingMetrics.hpp"
+#include "PathUtilities.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
-using namespace paras_phase3;
+using namespace paras_advanced;
 
-static void test_string_utilities() {
-    assert(trim("  hello \t") == "hello");
-    assert(asciiLower("MaCHine") == "machine");
-    assert(normalizeExtension(" TXT ") == ".txt");
-    assert(containsCaseInsensitive("D:/Notes/AI.txt", "notes"));
-    assert(jsonEscape("a\nb") == "a\\nb");
-    assert(csvEscape("a,b") == "\"a,b\"");
-    assert(csvEscape("a\"b") == "\"a\"\"b\"");
+static void test_document_stats() {
+    DocumentStats analyzer;
+    DocumentStatistics stats = analyzer.analyze("alpha beta\n\nGamma");
+    assert(stats.characters == 17);
+    assert(stats.words == 3);
+    assert(stats.lines == 3);
+    assert(stats.nonEmptyLines == 2);
+    assert(stats.averageWordLength > 4.0 && stats.averageWordLength < 5.0);
+    DocumentStatistics empty = analyzer.analyze("");
+    assert(empty.words == 0);
+    assert(empty.averageWordLength == 0.0);
 }
 
-static void test_query_parser() {
-    QueryParser parser;
-    QueryPlan plan = parser.parse("machine learning -draft type:TXT path:notes");
-    assert(plan.valid());
-    assert(plan.requiredTerms.size() == 2);
-    assert(plan.requiredTerms[0] == "machine");
-    assert(plan.excludedTerms.size() == 1);
-    assert(plan.excludedTerms[0] == "draft");
-    assert(plan.extension == ".txt");
-    assert(plan.pathContains == "notes");
+static void test_search_analytics() {
+    std::vector<QueryEvent> events;
+    QueryEvent a = {"machine", 3, 10}; events.push_back(a);
+    QueryEvent b = {"python", 0, 20}; events.push_back(b);
+    QueryEvent c = {"machine", 2, 30}; events.push_back(c);
 
-    QueryPlan phrase = parser.parse("\"machine learning\"");
-    assert(phrase.valid());
-    assert(phrase.phrases.size() == 1);
+    SearchAnalytics analytics;
+    SearchSummary summary = analytics.summarize(events);
+    assert(summary.totalQueries == 3);
+    assert(summary.successfulQueries == 2);
+    assert(summary.emptyQueries == 1);
+    assert(summary.totalDurationMilliseconds == 60);
+    assert(summary.averageDurationMilliseconds == 20.0);
+    assert(summary.successRate > 66.6 && summary.successRate < 66.7);
 
-    assert(!parser.parse("machine \"unfinished").valid());
-    assert(!parser.parse("type:").valid());
-    assert(!parser.parse("-").valid());
-    assert(!parser.parse("unknown:value").valid());
+    std::vector<std::string> top = analytics.mostFrequentQueries(events, 1);
+    assert(top.size() == 1 && top[0] == "machine");
 }
 
-static void test_metadata_filter() {
-    std::vector<FileMetadata> files;
-    FileMetadata a; a.path="D:/Notes/one.txt"; a.extension=".txt";
-    a.sizeBytes=100; a.modifiedEpoch=1000; files.push_back(a);
-    FileMetadata b; b.path="D:/Images/two.png"; b.extension=".png";
-    b.sizeBytes=500; b.modifiedEpoch=2000; files.push_back(b);
+static void test_deduplicator() {
+    std::vector<RankedPath> input;
+    RankedPath a = {"D:\\Notes\\A.txt", 0.9}; input.push_back(a);
+    RankedPath b = {"d:/notes/a.TXT", 0.5}; input.push_back(b);
+    RankedPath c = {"D:/Notes/B.txt", 0.4}; input.push_back(c);
 
-    MetadataFilter filter;
-    filter.extension="TXT";
-    filter.pathContains="notes";
-    filter.minimumBytes=50; filter.useMinimum=true;
-    filter.maximumBytes=200; filter.useMaximum=true;
-
-    MetadataFilterEngine engine;
-    std::vector<FileMetadata> found=engine.apply(files,filter);
-    assert(found.size()==1);
-    assert(found[0].path==a.path);
+    ResultDeduplicator deduplicator;
+    std::vector<RankedPath> output = deduplicator.removeDuplicatePaths(input);
+    assert(output.size() == 2);
+    assert(output[0].score == 0.9);
+    assert(output[1].path == c.path);
 }
 
-static void test_snippet_builder() {
-    SnippetBuilder builder;
-    std::string content="The first paragraph contains background information. "
-                        "Machine learning helps computers find patterns in data. "
-                        "The final paragraph contains a summary.";
-    std::vector<std::string> terms;
-    terms.push_back("learning");
-    Snippet snippet=builder.build(content,terms,90);
-    assert(!snippet.text.empty());
-    assert(!snippet.matchedTerms.empty());
-    assert(snippet.matchedTerms[0]=="learning");
+static void test_ranking_metrics() {
+    std::vector<std::string> retrieved;
+    retrieved.push_back("a"); retrieved.push_back("b"); retrieved.push_back("x");
+    std::vector<std::string> relevant;
+    relevant.push_back("a"); relevant.push_back("b"); relevant.push_back("c");
+
+    RankingMetrics metrics;
+    RankingScore score = metrics.evaluate(retrieved, relevant);
+    assert(std::fabs(score.precision - 2.0/3.0) < 0.00001);
+    assert(std::fabs(score.recall - 2.0/3.0) < 0.00001);
+    assert(std::fabs(score.f1 - 2.0/3.0) < 0.00001);
 }
 
-static void test_exporters() {
-    SearchResultRecord item;
-    item.path="D:/Notes/a,b.txt";
-    item.title="A \"quoted\" title";
-    item.score=0.875;
-    item.snippet="machine learning\npreview";
-
-    std::vector<SearchResultRecord> records(1,item);
-    ResultExporter exporter;
-    const std::string csv=exporter.toCsv(records);
-    const std::string json=exporter.toJson(records);
-    assert(csv.find("\"D:/Notes/a,b.txt\"")!=std::string::npos);
-    assert(json.find("\\\"quoted\\\"")!=std::string::npos);
-    assert(json.find("\\n")!=std::string::npos);
+static void test_path_utilities() {
+    assert(PathUtilities::normalizeSeparators("D:\\Docs\\a.txt") == "D:/Docs/a.txt");
+    assert(PathUtilities::fileName("D:\\Docs\\a.txt") == "a.txt");
+    assert(PathUtilities::extension("D:/Docs/a.txt") == ".txt");
+    assert(PathUtilities::parentPath("D:/Docs/a.txt") == "D:/Docs");
+    assert(PathUtilities::extension("README") == "");
 }
 
 int main() {
-    test_string_utilities();
-    test_query_parser();
-    test_metadata_filter();
-    test_snippet_builder();
-    test_exporters();
-    std::cout << "All Paras Phase III add-on tests passed.\n";
+    test_document_stats();
+    test_search_analytics();
+    test_deduplicator();
+    test_ranking_metrics();
+    test_path_utilities();
+    std::cout << "All advanced add-on tests passed.\n";
     return 0;
 }
