@@ -1,27 +1,29 @@
-# Advanced Add-on API Guide
+# API Guide
 
-## DocumentStats
-Analyzes an in-memory string. Character count is byte count, not Unicode code-point
-count. Words are sequences separated by whitespace. Lines count newline-separated
-segments; an empty input has zero lines.
+## QueryValidator
+`validate(query, maximumLength)` returns a ValidationResult. The result has a
+boolean named `valid` and a list of issue codes and messages. `trim` removes
+whitespace at the beginning and end of a string. This module checks input only;
+it does not execute or rewrite the user's search.
 
-## SearchAnalytics
-Summarizes caller-supplied query events. A successful query is one with at least
-one result. Non-positive durations are ignored in the duration total but each event
-still contributes to the average denominator. Frequent queries are sorted by
-descending frequency and then alphabetically for ties.
+## FileTypeClassifier
+`extensionOf(path)` extracts the suffix after the last path separator and converts
+it to lowercase. `classify(path)` returns the extension, broad category, description,
+and a text-like flag. Classification is based on the extension, not file contents.
+A `.pdf` result does not mean PDF text extraction is implemented here.
 
-## ResultDeduplicator
-Normalizes slash direction and ASCII letter case for comparison. It retains the
-first occurrence and its score. It does not resolve `..`, symbolic links, network
-share aliases, or filesystem case-sensitivity rules.
+## SearchSuggestionEngine
+`add(term, frequency)` inserts a term or increases its frequency. Matching is
+case-insensitive for the characters handled by the C locale. `suggest(prefix, limit)`
+returns matching terms ordered by frequency and then alphabetically. Data stays
+in memory and is not written to the IndexIt database.
 
-## RankingMetrics
-Computes precision, recall and F1 using unique retrieved IDs and unique relevant
-IDs. Duplicate retrieved IDs count once. If the denominator is zero, the related
-metric is zero.
+## DelimitedTextReader
+`parse(content, delimiter)` reads rows and supports quoted delimiters, doubled quote
+characters and CR/LF line endings. An unclosed quote produces an error result.
+`escapeField` quotes fields when needed. `joinRow` serializes a vector of fields.
 
-## PathUtilities
-Performs lexical path string operations only. It does not query the filesystem,
-resolve absolute paths, or canonicalize symlinks. A dotfile such as `.gitignore`
-is treated as having no extension.
+## Scope
+All modules use standard C++11. They do not access the file system, SQLite, or
+the main IndexIt application. Review encoding, large-input limits and error
+handling before production integration.
