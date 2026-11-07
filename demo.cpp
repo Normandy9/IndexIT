@@ -1,30 +1,23 @@
-#include "DocumentStats.hpp"
-#include "RankingMetrics.hpp"
-#include "SearchAnalytics.hpp"
-
+#include "QueryValidator.hpp"
+#include "FileTypeClassifier.hpp"
+#include "SearchSuggestionEngine.hpp"
+#include "DelimitedTextReader.hpp"
 #include <iostream>
-#include <vector>
-
 int main() {
-    paras_advanced::DocumentStats analyzer;
-    paras_advanced::DocumentStatistics stats =
-        analyzer.analyze("IndexIt searches local documents.\nIt ranks useful results.");
-
-    std::cout << "Words: " << stats.words << "\n";
-    std::cout << "Lines: " << stats.lines << "\n";
-    std::cout << "Average word length: " << stats.averageWordLength << "\n";
-
-    std::vector<std::string> returned;
-    returned.push_back("doc1");
-    returned.push_back("doc2");
-    std::vector<std::string> relevant;
-    relevant.push_back("doc1");
-    relevant.push_back("doc3");
-
-    paras_advanced::RankingMetrics metrics;
-    paras_advanced::RankingScore score = metrics.evaluate(returned, relevant);
-    std::cout << "Precision: " << score.precision << "\n";
-    std::cout << "Recall: " << score.recall << "\n";
-    std::cout << "F1: " << score.f1 << "\n";
+    using namespace paras;
+    ValidationResult validation = QueryValidator::validate("machine learning");
+    std::cout << "Query valid: " << (validation.valid ? "yes" : "no") << "\n";
+    FileTypeInfo type = FileTypeClassifier::classify("research.pdf");
+    std::cout << "File category: " << type.category << "\n";
+    SearchSuggestionEngine suggestions;
+    suggestions.add("machine", 8);
+    suggestions.add("management", 3);
+    suggestions.add("manual", 2);
+    std::vector<Suggestion> matches = suggestions.suggest("ma");
+    for (std::size_t i = 0; i < matches.size(); ++i) {
+        std::cout << matches[i].term << " (" << matches[i].frequency << ")\n";
+    }
+    DelimitedReadResult rows = DelimitedTextReader::parse("id,title\n1,IndexIt\n");
+    std::cout << "CSV rows: " << rows.rows.size() << "\n";
     return 0;
 }
