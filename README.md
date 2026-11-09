@@ -1,10 +1,12 @@
-# Paras Phase III Advanced Add-ons
+# IndexIt
 
-This is a second optional, isolated C++ add-on package. It does not modify the
-original IndexIt source, root CMakeLists.txt, CLI, UI, database, cache or ranking.
+IndexIt is a Windows document indexing and search application. Its native C++
+window is backed by the command-line engine. Application code is under `src/`,
+public headers are under `include/`, and the main test runner is under `tests/`.
 
-Copy this directory into the repository as `paras_phase3_advanced/`.
-Build it independently from this directory:
+## Build
+
+Configure and build with CMake on Windows:
 
 ```powershell
 cmake -S . -B build
@@ -12,14 +14,14 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Components
+The optional, standalone C++ add-on package is in
+[`addons`](addons/README.md). It has its own
+CMake project and is not linked into the IndexIt application.
 
-- `DocumentStats`: computes word, line, character and average-word-length statistics.
-- `SearchAnalytics`: summarizes query history and computes query frequency and success rate.
-- `ResultDeduplicator`: removes duplicate result paths without changing the first result's order.
-- `RankingMetrics`: calculates precision, recall and F1 from relevance judgments.
-- `PathUtilities`: lexical path normalization and filename/extension helpers.
-
-The package works only on values passed by the caller. It does not read files,
-connect to SQLite, inspect the Windows filesystem, or change IndexIt's existing
-ranking or search behaviour. Integration is optional and requires code review.
+To launch the Windows windowed interface after building, run
+`build\IndexItWindow.exe`. It offers Index, Search text, Find document,
+Suggestions, History, Statistics, and Clean cache actions with hover descriptions.
+Search text shows live term suggestions while you type; double-click one to
+complete the current word. The existing command-line app runs invisibly to
+perform each action. By default, each selected folder gets its own index cache,
+so searching one folder cannot show results from another folder's index.

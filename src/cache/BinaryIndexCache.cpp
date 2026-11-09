@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <cwchar>
 
 extern "C" {
 #include "winfs.h"
@@ -24,6 +25,17 @@ struct IndexCacheHeader {
 
 static const char MAGIC_STR[8] = {'I', 'N', 'D', 'E', 'X', 'I', 'T', '\0'};
 static const uint32_t FORMAT_VERSION = 1;
+
+static std::string toUtf8(const std::wstring& value) {
+    if (value.empty()) return {};
+    int length = WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                                    nullptr, 0, nullptr, nullptr);
+    if (!length) return {};
+    std::string result(length, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                        &result[0], length, nullptr, nullptr);
+    return result;
+}
 
 // Standard CRC-32 (IEEE 802.3)
 uint32_t BinaryIndexCache::computeCrc32(const void* data, size_t length) {
@@ -77,9 +89,9 @@ bool BinaryIndexCache::checkDiskSpace(const std::wstring& cacheDir, uint64_t min
     ULARGE_INTEGER freeBytes, totalBytes, totalFree;
     if (GetDiskFreeSpaceExW(cacheDir.c_str(), &freeBytes, &totalBytes, &totalFree)) {
         if (freeBytes.QuadPart < minBytesRequired) {
-            std::wcerr << L"[WARN] Insufficient disk space in cache directory: "
-                       << (freeBytes.QuadPart / (1024 * 1024)) << L" MB free (threshold: "
-                       << (minBytesRequired / (1024 * 1024)) << L" MB). Continuing in memory-only mode.\n";
+            std::cerr << "[WARN] Insufficient disk space in cache directory: "
+                      << (freeBytes.QuadPart / (1024 * 1024)) << " MB free (threshold: "
+                      << (minBytesRequired / (1024 * 1024)) << " MB). Continuing in memory-only mode.\n";
             return false;
         }
         return true;
@@ -270,8 +282,8 @@ bool BinaryIndexCache::load(const std::wstring& cacheDir, CppInvertedIndex& inde
     // Validate Checksum (CRC32)
     uint32_t calcCrc = computeCrc32(payload.data(), payload.size());
     if (calcCrc != hdr.crc32) {
-        std::wcerr << L"[WARN] index.cache CRC32 checksum mismatch (expected " << hdr.crc32
-                   << L", calculated " << calcCrc << L"). Discarding corrupt cache.\n";
+        std::cerr << "[WARN] index.cache CRC32 checksum mismatch (expected " << hdr.crc32
+                  << ", calculated " << calcCrc << "). Discarding corrupt cache.\n";
         return false;
     }
 
@@ -455,47 +467,52 @@ void CacheManifest::recordFile(const std::wstring& cacheDir, const std::wstring&
 
 std::vector<std::pair<std::wstring, uint64_t>> CacheManifest::listTrackedFiles(const std::wstring& cacheDir) {
     std::vector<std::pair<std::wstring, uint64_t>> files;
-
-    // Enumerate actual files in cache directory
-    std::wstring searchPattern = cacheDir + L"\\*.*";
-    WIN32_FIND_DATAW fd;
-    HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
+    auto enumerate = [&](auto&& self, const std::wstring& directory,
+                         const std::wstring& relative) -> void {
+        WIN32_FIND_DATAW fd;
+        HANDLE find = FindFirstFileW((directory + L"\\*").c_str(), &fd);
+        if (find == INVALID_HANDLE_VALUE) return;
         do {
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                LARGE_INTEGER li;
-                li.HighPart = fd.nFileSizeHigh;
-                li.LowPart = fd.nFileSizeLow;
-                files.emplace_back(fd.cFileName, static_cast<uint64_t>(li.QuadPart));
+            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+            std::wstring relativePath = relative.empty() ? fd.cFileName : relative + L"\\" + fd.cFileName;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                    self(self, directory + L"\\" + fd.cFileName, relativePath);
+            } else {
+                LARGE_INTEGER size;
+                size.HighPart = fd.nFileSizeHigh;
+                size.LowPart = fd.nFileSizeLow;
+                files.emplace_back(relativePath, static_cast<uint64_t>(size.QuadPart));
             }
-        } while (FindNextFileW(hFind, &fd));
-        FindClose(hFind);
-    }
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+    };
+    enumerate(enumerate, cacheDir, L"");
     return files;
 }
 
 bool CacheManifest::clean(const std::wstring& cacheDir, bool autoConfirm) {
     auto files = listTrackedFiles(cacheDir);
     if (files.empty()) {
-        std::wcout << L"Cache directory is already empty: " << cacheDir << L"\n";
+        std::cout << "Cache directory is already empty: " << toUtf8(cacheDir) << "\n";
         return true;
     }
 
     uint64_t totalBytes = 0;
-    std::wcout << L"Cache directory: " << cacheDir << L"\n";
-    std::wcout << L"Files to delete:\n";
+    std::cout << "Cache directory: " << toUtf8(cacheDir) << "\n";
+    std::cout << "Files to delete:\n";
     for (const auto& f : files) {
-        std::wcout << L"  - " << f.first << L" (" << f.second << L" bytes)\n";
+        std::cout << "  - " << toUtf8(f.first) << " (" << f.second << " bytes)\n";
         totalBytes += f.second;
     }
-    std::wcout << L"Total disk space to free: " << totalBytes << L" bytes.\n";
+    std::cout << "Total disk space to free: " << totalBytes << " bytes.\n";
 
     if (!autoConfirm) {
-        std::wcout << L"Are you sure you want to delete these files? (y/N): ";
+        std::cout << "Are you sure you want to delete these files? (y/N): ";
         char answer = 'n';
         std::cin >> answer;
         if (answer != 'y' && answer != 'Y') {
-            std::wcout << L"Aborted. No files were deleted.\n";
+            std::cout << "Aborted. No files were deleted.\n";
             return false;
         }
     }
@@ -511,7 +528,7 @@ bool CacheManifest::clean(const std::wstring& cacheDir, bool autoConfirm) {
         }
     }
 
-    std::wcout << L"Successfully cleaned " << deletedCount << L" files (" << totalBytes << L" bytes reclaimed).\n";
+    std::cout << "Successfully cleaned " << deletedCount << " files (" << totalBytes << " bytes reclaimed).\n";
     return true;
 }
 

@@ -148,24 +148,20 @@ std::vector<ScoredDocument> CppInvertedIndex::search(const std::string& query, I
     std::vector<ParsedQueryTerm> terms = parse_query(query);
     if (terms.empty()) return {};
 
+    auto lookupTerm = [this](const ParsedQueryTerm& term) {
+        return term.isPrefix
+            ? prefixIndex_->lookupPrefix(term.cleanTerm)
+            : exactIndex_->lookup(term.cleanTerm);
+    };
+
     // Get postings for first term
-    std::vector<Posting> current_postings;
-    if (terms[0].isPrefix) {
-        current_postings = prefixIndex_->lookupPrefix(terms[0].cleanTerm);
-    } else {
-        current_postings = exactIndex_->lookup(terms[0].cleanTerm);
-    }
+    std::vector<Posting> current_postings = lookupTerm(terms[0]);
 
     if (current_postings.empty()) return {};
 
     // Two-pointer linear merge intersection for multi-term AND query
     for (size_t i = 1; i < terms.size(); ++i) {
-        std::vector<Posting> next_postings;
-        if (terms[i].isPrefix) {
-            next_postings = prefixIndex_->lookupPrefix(terms[i].cleanTerm);
-        } else {
-            next_postings = exactIndex_->lookup(terms[i].cleanTerm);
-        }
+        std::vector<Posting> next_postings = lookupTerm(terms[i]);
         if (next_postings.empty()) return {};
 
         std::vector<Posting> intersection;
@@ -192,12 +188,7 @@ std::vector<ScoredDocument> CppInvertedIndex::search(const std::string& query, I
     for (const auto& p : current_postings) {
         double total_score = 0.0;
         for (const auto& term : terms) {
-            std::vector<Posting> tp;
-            if (term.isPrefix) {
-                tp = prefixIndex_->lookupPrefix(term.cleanTerm);
-            } else {
-                tp = exactIndex_->lookup(term.cleanTerm);
-            }
+            std::vector<Posting> tp = lookupTerm(term);
 
             uint32_t tf = 0;
             // Binary search in sorted tp for p.document_id

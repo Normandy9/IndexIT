@@ -43,6 +43,7 @@ public:
     std::vector<std::pair<std::string, size_t>> suggestSimilar(const std::string& term, size_t max_results = 5) const;
 
     std::wstring getPath(uint64_t docId) const { return docStore_.getPath(docId); }
+    std::string getSnippet(uint64_t docId, const std::string& query, size_t context = 65) const;
 
     ITermIndex* getExactIndex() const { return exactIndex_.get(); }
     ITermIndex* getPrefixIndex() const { return prefixIndex_.get(); }
