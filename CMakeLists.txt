@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(IndexIt LANGUAGES C CXX)
 
+if(WIN32)
+    enable_language(RC)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 14)
@@ -33,6 +37,11 @@ target_link_libraries(indexit_core PUBLIC shell32)
 
 add_executable(indexit src/main.cpp)
 target_link_libraries(indexit PRIVATE indexit_core)
+
+add_executable(indexit_gui WIN32 src/Gui.cpp src/IndexIt.rc)
+target_link_libraries(indexit_gui PRIVATE indexit_core shell32 ole32 comctl32)
+add_dependencies(indexit_gui indexit)
+set_target_properties(indexit_gui PROPERTIES OUTPUT_NAME "IndexItWindow")
 
 add_executable(test_runner tests/test_runner.cpp)
 target_link_libraries(test_runner PRIVATE indexit_core)
