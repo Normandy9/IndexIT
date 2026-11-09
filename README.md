@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/indexit-logo.png" alt="IndexIt logo" width="480">
+</p>
+
 <h1 align="center">IndexIt</h1>
 
 <p align="center"><strong>Find the document by what it says, not just what you named it.</strong></p>
